@@ -1,5 +1,3 @@
-** bwget **
-
 `bwget` synchronizes your Bitwarden vault to a gpg-encrypted local file for fast access and implements a simple search & formatting functionality.
 
 ```
