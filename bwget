@@ -1,0 +1,184 @@
+#!/bin/sh
+
+# Copyright (c) 2021 Pietro Cerutti <gahr@gahr.ch>
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+
+set -euf
+
+keyid=bitwarden
+search_term=""
+
+bwgetdir=~/.config/bwget
+bwgetcache="$bwgetdir"/bw.gpg
+
+blue="\"\u001b[34m\""
+yellow="\"\u001b[33m\""
+green="\"\u001b[32m\""
+rst="\"\u001b[0m\""
+nl="\"\n\""
+
+sync()
+{
+
+    if ! gpg --quiet --list-keys "$keyid" > /dev/null 2>&1; then
+        echo "Cannot encrypt to: $keyid"
+        exit 1
+    fi
+
+    session=""
+    status=$(bw status | jq -r .status)
+    case "$status" in
+        unauthenticated)
+            session="$(bw login --raw)"
+            ;;
+        locked)
+            session="$(bw unlock --raw)"
+            ;;
+        unlocked)
+            # This means we probably have BW_SESSION in the env
+            ;;
+        *)
+            echo "Unexpected status: $status"
+            exit 1
+            ;;
+    esac
+
+    bw_cmd=bw
+    if [ -n "$session" ]; then
+        bw_cmd="${bw_cmd} --session $session"
+    fi
+
+    $bw_cmd sync
+    $bw_cmd list items | \
+        gpg --encrypt --recipient "$keyid" --output "$bwgetcache"
+}
+
+check_sync()
+{
+    if [ ! -e "$bwgetcache" ]; then
+        sync
+    fi
+}
+
+check_config_dir()
+{
+    if [ ! -d "$bwgetdir" ]; then
+        mkdir -p "$bwgetdir"
+    fi
+}
+
+format()
+{
+    jq -r "
+        ${blue} + .name + ${rst} +
+        \" [\" + ${green} + .id + ${rst} + \"]\" + ${nl} +
+        ${yellow} + \"Username\" + ${rst} + \": \" + .login.username + ${nl} +
+        ${yellow} + \"Password\" + ${rst} + \": \" + .login.password + ${nl} +
+        ${yellow} + \"URL     \" + ${rst} + \": \" + .login.uris[0].uri + ${nl} +
+        ${yellow} + \"Notes   \" + ${rst} + \": \" + .notes"
+}
+
+limit()
+{
+    jq ".[] | select(.name|test(\"$search_term\"; \"i\"))"
+}
+
+dump()
+{
+    gpg --pinentry-mode loopback --quiet --decrypt "$bwgetcache"
+}
+
+usage()
+{
+    echo "Usage: $0 [options] command"
+    echo ""
+    echo "Options"
+    echo "    --keyid <id>  Use <id> as the recipient for encryption"
+    echo ""
+    echo "Command"
+    echo "    --sync        Synchronize the local cache."
+    echo "    --dump        Dump the local cache."
+    echo "    --help        Display this help page."
+    echo "    <term>        Search for <term>."
+    echo ""
+    exit 1
+}
+
+cmd_search()
+{
+    check_sync
+    dump | limit | format 
+}
+
+cmd_dump()
+{
+    check_sync
+    dump
+}
+
+cmd_sync()
+{
+    sync
+}
+
+main()
+{
+    check_config_dir
+
+    cmd=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --keyid)
+                [ $# -eq 1 ] && usage
+                keyid="$2"
+                shift 2
+                ;;
+            --sync)
+                [ -n "$cmd" ] && usage
+                cmd=cmd_sync
+                shift
+                ;;
+            --dump)
+                [ -n "$cmd" ] && usage
+                cmd=cmd_dump
+                shift
+                ;;
+            --help)
+                usage
+                ;;
+            *)
+                [ -n "$cmd" ] && usage
+                cmd=cmd_search
+                [ $# -eq 0 ] && usage
+                search_term="$1"
+                shift
+                ;;
+        esac
+    done
+
+    [ -z "$cmd" ] && usage
+
+    "$cmd"
+}
+
+main "$@"
