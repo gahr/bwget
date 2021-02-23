@@ -18,7 +18,7 @@ Command
 ```sh
 $ bwget item Google
 Google [1b86584f-6d63-4302-aca0-acd40071223d]
-Uername: example@email.com
+Username: example@email.com
 Password: V3ryS3cret,
 URL     : https://accounts.google.com
 Notes   : Backup codes:
