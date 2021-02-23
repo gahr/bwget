@@ -110,24 +110,20 @@ dump()
 
 usage()
 {
-    echo "Usage: $0 [options] command"
+    echo "Usage: $0 [options] command [args]"
     echo ""
     echo "Options"
     echo "    --keyid <id>  Use <id> as the recipient for encryption"
     echo ""
     echo "Command"
-    echo "    --sync        Synchronize the local cache."
-    echo "    --dump        Dump the local cache."
-    echo "    --help        Display this help page."
-    echo "    <term>        Search for <term>."
+    echo "    item <search>    Search and dump an item"
+    echo "    user <search>    Search and dump the username of an item"
+    echo "    pass <search>    Search and dump the password of an item"
+    echo "    dump             Dump the local cache."
+    echo "    sync             Synchronize with Bitwarden valut"
+    echo "    help             Display this help page."
     echo ""
     exit 1
-}
-
-cmd_search()
-{
-    check_sync
-    dump | limit | format 
 }
 
 cmd_dump()
@@ -141,6 +137,24 @@ cmd_sync()
     sync
 }
 
+cmd_item()
+{
+    check_sync
+    dump | limit | format 
+}
+
+cmd_user()
+{
+    check_sync
+    dump | limit | jq -r '.login.username'
+}
+
+cmd_pass()
+{
+    check_sync
+    dump | limit | jq -r '.login.password'
+}
+
 main()
 {
     check_config_dir
@@ -149,29 +163,29 @@ main()
     while [ $# -gt 0 ]; do
         case "$1" in
             --keyid)
-                [ $# -eq 1 ] && usage
+                [ $# -lt 2 ] && usage
                 keyid="$2"
                 shift 2
                 ;;
-            --sync)
+            user|pass|item)
+                [ $# -lt 2 ] || [ -n "$cmd" ] && usage
+                cmd=cmd_$1
+                search_term="$2"
+                shift 2
+                ;;
+            sync)
                 [ -n "$cmd" ] && usage
                 cmd=cmd_sync
                 shift
                 ;;
-            --dump)
+            dump)
                 [ -n "$cmd" ] && usage
                 cmd=cmd_dump
                 shift
                 ;;
-            --help)
-                usage
-                ;;
             *)
-                [ -n "$cmd" ] && usage
-                cmd=cmd_search
-                [ $# -eq 0 ] && usage
-                search_term="$1"
-                shift
+
+                usage
                 ;;
         esac
     done
