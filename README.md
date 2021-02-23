@@ -10,9 +10,9 @@ Command
     item <search>    Search and dump an item
     user <search>    Search and dump the username of an item
     pass <search>    Search and dump the password of an item
-    dump             Dump the local cache.
-    sync             Synchronize with Bitwarden valut
-    help             Display this help page.
+    dump             Dump the local cache in JSON format
+    sync             Synchronize with remote Bitwarden vault
+    help             Display this help page
 ```
 
 ```sh

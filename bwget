@@ -119,9 +119,9 @@ usage()
     echo "    item <search>    Search and dump an item"
     echo "    user <search>    Search and dump the username of an item"
     echo "    pass <search>    Search and dump the password of an item"
-    echo "    dump             Dump the local cache."
-    echo "    sync             Synchronize with Bitwarden valut"
-    echo "    help             Display this help page."
+    echo "    dump             Dump the local cache in JSON format"
+    echo "    sync             Synchronize with remote Bitwarden vault"
+    echo "    help             Display this help page"
     echo ""
     exit 1
 }
