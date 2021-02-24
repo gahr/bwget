@@ -4,7 +4,7 @@
 Usage: ./bwget [options] command [args]
 
 Options
-    --keyid <id>  Use <id> as the recipient for encryption
+    --keyid <id>     Use <id> as the recipient for encryption
 
 Command
     item <search>    Search and dump an item

@@ -113,7 +113,7 @@ usage()
     echo "Usage: $0 [options] command [args]"
     echo ""
     echo "Options"
-    echo "    --keyid <id>  Use <id> as the recipient for encryption"
+    echo "    --keyid <id>     Use <id> as the recipient for encryption"
     echo ""
     echo "Command"
     echo "    item <search>    Search and dump an item"
