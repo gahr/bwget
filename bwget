@@ -31,18 +31,45 @@ search_term=""
 bwgetdir=~/.config/bwget
 bwgetcache="$bwgetdir"/bw.gpg
 
-blue="\"\u001b[34m\""
-yellow="\"\u001b[33m\""
-green="\"\u001b[32m\""
-rst="\"\u001b[0m\""
-nl="\"\n\""
+jq_blue="\"\u001b[34m\""
+jq_yellow="\"\u001b[33m\""
+jq_green="\"\u001b[32m\""
+jq_rst="\"\u001b[0m\""
+jq_nl="\"\n\""
+
+sh_red='\033[0;31m'
+sh_rst='\033[0;0m'
+
+die_header()
+{
+    title="$1"
+    # shellcheck disable=SC2059
+    printf "${sh_red}"
+    printf "%s" "${title}"
+    # shellcheck disable=SC2059
+    printf "${sh_rst}"
+}
+
+die()
+{
+    die_header "$1"
+    printf ": %s\n" "$2"
+    exit 1
+}
+
+die_nl()
+{
+    die_header "$1"
+    printf "\n%s\n" "$2"
+    exit 1
+}
+
 
 sync()
 {
 
     if ! gpg --quiet --list-keys "$keyid" > /dev/null 2>&1; then
-        echo "Cannot encrypt to: $keyid"
-        exit 1
+        die "PG error" "cannot encrypt to $keyid"
     fi
 
     session=""
@@ -58,7 +85,7 @@ sync()
             # This means we probably have BW_SESSION in the env
             ;;
         *)
-            echo "Unexpected status: $status"
+            die "Unexpected status" "$status"
             exit 1
             ;;
     esac
@@ -90,12 +117,12 @@ check_config_dir()
 format()
 {
     jq -r "
-        ${blue} + .name + ${rst} +
-        \" [\" + ${green} + .id + ${rst} + \"]\" + ${nl} +
-        ${yellow} + \"Username\" + ${rst} + \": \" + .login.username + ${nl} +
-        ${yellow} + \"Password\" + ${rst} + \": \" + .login.password + ${nl} +
-        ${yellow} + \"URL     \" + ${rst} + \": \" + .login.uris[0].uri + ${nl} +
-        ${yellow} + \"Notes   \" + ${rst} + \": \" + .notes"
+        ${jq_blue} + .name + ${jq_rst} +
+        \" [\" + ${jq_green} + .id + ${jq_rst} + \"]\" + ${jq_nl} +
+        ${jq_yellow} + \"Username\" + ${jq_rst} + \": \" + .login.username + ${jq_nl} +
+        ${jq_yellow} + \"Password\" + ${jq_rst} + \": \" + .login.password + ${jq_nl} +
+        ${jq_yellow} + \"URL     \" + ${jq_rst} + \": \" + .login.uris[0].uri + ${jq_nl} +
+        ${jq_yellow} + \"Notes   \" + ${jq_rst} + \": \" + .notes"
 }
 
 limit()
@@ -140,19 +167,45 @@ cmd_sync()
 cmd_item()
 {
     check_sync
-    dump | limit | format 
+    data=$(dump | limit)
+    check_any "$data"
+    echo "$data" | format
+}
+
+check_single()
+{
+    data="$1"
+    len=$(echo "$data" | jq -c '.' | wc -l)
+    if [ "$len" -gt 1 ]; then
+        die_nl "Multiple matches" "$(echo "$data" | jq -r '"* " + .name')"
+    fi
+}
+
+check_any()
+{
+    data="$1"
+    len=$(echo "$data" | jq -c '.' | wc -l)
+    if [ "$len" -eq 0 ]; then
+        die "No matches" "$search_term"
+    fi
 }
 
 cmd_user()
 {
     check_sync
-    dump | limit | jq -r '.login.username'
+    data=$(dump | limit)
+    check_any "$data"
+    check_single "$data"
+    echo "$data" | jq -r .login.username
 }
 
 cmd_pass()
 {
     check_sync
-    dump | limit | jq -r '.login.password'
+    data=$(dump | limit)
+    check_any "$data"
+    check_single "$data"
+    echo "$data" | jq -r .login.password
 }
 
 main()
@@ -184,8 +237,7 @@ main()
                 shift
                 ;;
             *)
-
-                usage
+                die_nl "Invalid argument: $1" "$(usage)"
                 ;;
         esac
     done
