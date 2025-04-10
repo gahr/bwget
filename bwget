@@ -23,13 +23,16 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 
-set -euf
+set -o pipefail
 
-keyid=bitwarden
+export PINENTRY_PROGRAM=pinentry-curses
 search_term=""
 
+age_cmd=rage
 bwgetdir=~/.config/bwget
-bwgetcache="$bwgetdir"/bw.gpg
+bwgetcache="$bwgetdir"/bw.age
+age_identity_file="$bwgetdir"/age.identity
+age_recipient_file="$bwgetdir"/age.recipient
 
 jq_blue="\"\u001b[34m\""
 jq_yellow="\"\u001b[33m\""
@@ -68,10 +71,6 @@ die_nl()
 sync()
 {
 
-    if ! gpg --quiet --list-keys "$keyid" > /dev/null 2>&1; then
-        die "PG error" "cannot encrypt to $keyid"
-    fi
-
     session=""
     status=$(bw status | jq -r .status)
     case "$status" in
@@ -96,8 +95,7 @@ sync()
     fi
 
     $bw_cmd sync
-    $bw_cmd list items | \
-        gpg --encrypt --recipient "$keyid" --output "$bwgetcache"
+    $bw_cmd list items | $age_cmd --encrypt -r "$(cat "$age_recipient_file")" -o "$bwgetcache" 2& >/dev/null
 }
 
 check_sync()
@@ -132,7 +130,11 @@ limit()
 
 dump()
 {
-    gpg --quiet --decrypt "$bwgetcache"
+    if out="$($age_cmd -d -i "$age_identity_file" "$bwgetcache")"; then
+        echo "${out}"
+    else
+        exit 1
+    fi
 }
 
 usage()
@@ -167,9 +169,13 @@ cmd_sync()
 cmd_item()
 {
     check_sync
-    data=$(dump | limit)
+    if ! data="$(dump)"; then
+        exit 1
+    fi
+    data="$(echo "${data}" | limit)"
     check_any "$data"
     echo "$data" | format
+    return $?
 }
 
 check_single()
@@ -193,7 +199,10 @@ check_any()
 cmd_user()
 {
     check_sync
-    data=$(dump | limit)
+    if ! data="$(dump)"; then
+        exit 1
+    fi
+    data="$(echo "${data}" | limit)"
     check_any "$data"
     check_single "$data"
     echo "$data" | jq -r .login.username
@@ -202,7 +211,10 @@ cmd_user()
 cmd_pass()
 {
     check_sync
-    data=$(dump | limit)
+    if ! data="$(dump)"; then
+        exit 1
+    fi
+    data="$(echo "${data}" | limit)"
     check_any "$data"
     check_single "$data"
     echo "$data" | jq -r .login.password
@@ -245,6 +257,13 @@ main()
     [ -z "$cmd" ] && usage
 
     "$cmd"
+    return $?
 }
 
-main "$@"
+while true; do
+    out=$(main "$@" 2> /dev/null)
+    if [ $? = 0 ]; then
+        echo "${out}"
+        exit 0
+    fi
+done
